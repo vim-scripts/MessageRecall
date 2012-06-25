@@ -1,0 +1,143 @@
+*MessageRecall.txt*     Browse and re-insert previous (commit, status) messages.
+
+		       MESSAGE RECALL    by Ingo Karkat
+							   *MessageRecall.vim*
+description			|MessageRecall-description|
+usage				|MessageRecall-usage|
+installation			|MessageRecall-installation|
+configuration			|MessageRecall-configuration|
+integration			|MessageRecall-integration|
+limitations			|MessageRecall-limitations|
+known problems			|MessageRecall-known-problems|
+todo				|MessageRecall-todo|
+history				|MessageRecall-history|
+
+==============================================================================
+DESCRIPTION					   *MessageRecall-description*
+
+This plugin automatically persists (parts of) buffers used for the editing of
+commit (or other) messages, where Vim is invoked as the editor from an
+external tool. In these buffers, it sets up mappings and commands to iterate
+through stored past messages, and recall the contents for use in the currently
+edited message. This way, you automatically collect a history of (committed or
+aborted) past messages, and can quickly base your current message on contents
+recalled from that history.
+
+SEE ALSO								     *
+
+This plugin is used by:
+VcsMessageRecall (vimscript #0000): Browse and re-insert previous VCS commit
+				    messages.
+
+RELATED WORKS								     *
+
+==============================================================================
+USAGE							 *MessageRecall-usage*
+
+The plugin is completely inactive until you set it up for a particular
+buffer through the following function; you'll find the details directly in the
+.vim/autoload/MessageRecall.vim implementation file.
+
+MessageRecall#Setup( messageStoreDirspec, ... )
+
+
+INSIDE THE CURRENT MESSAGE BUFFER					     *
+						 *MessageRecall-message-usage*
+After setup, the following mappings and commands are available in the current
+message buffer:
+
+CTRL-P, CTRL-N		When the buffer has no unsaved changes: Replace the
+			edited message with a [count]'th previous / next
+			stored message.
+			When the buffer is modified: Open the [count]'th
+			previous / first stored message in the preview window.
+
+								*:MessageView*
+:[count]MessageView
+			View the [count]'th previous stored message in the
+			|preview-window|.
+:MessageView {message}|{filespec}
+			View {message} (auto-completed from the message store
+			directory) or any arbitrary {filespec} contents
+			in the |preview-window|.
+
+							      *:MessageRecall*
+:[count]MessageRecall[!]
+			Insert the [count]'th previous stored message below
+			the current line.
+:MessageRecall[!] {message}|{filespec}
+			Insert {message} (auto-completed from the message
+			store directory) or any arbitrary {filespec} contents
+			below the current line.
+
+			When the existing message consists of just empty
+			lines (originating from the message template that the
+			tool invoking Vim has put there), the inserted message
+			replaces those empty lines. With [!]: Replace an
+			existing message with the inserted one.
+
+
+INSIDE A MESSAGE PREVIEW WINDOW						     *
+						 *MessageRecall-preview-usage*
+CTRL-P, CTRL-N		Go to the previous / next stored message.
+
+:MessageRecall		Insert the previewed stored message below the current
+			line in the buffer from which the message preview was
+			opened.
+
+==============================================================================
+INSTALLATION					  *MessageRecall-installation*
+
+This script is packaged as a |vimball|. If you have the "gunzip" decompressor
+in your PATH, simply edit the *.vba.gz package in Vim; otherwise, decompress
+the archive first, e.g. using WinZip. Inside Vim, install by sourcing the
+vimball or via the |:UseVimball| command. >
+    vim MessageRecall.vba.gz
+    :so %
+To uninstall, use the |:RmVimball| command.
+
+DEPENDENCIES					  *MessageRecall-dependencies*
+
+- Requires Vim 7.0 or higher.
+- Requires the EditSimilar plugin (vimscript #2544), version 2.00 or higher.
+- Requires the BufferPersist plugin (vimscript #4115).
+
+==============================================================================
+CONFIGURATION					 *MessageRecall-configuration*
+
+==============================================================================
+INTEGRATION					   *MessageRecall-integration*
+
+==============================================================================
+LIMITATIONS					   *MessageRecall-limitations*
+
+KNOWN PROBLEMS					*MessageRecall-known-problems*
+
+TODO							  *MessageRecall-todo*
+
+								*:MessageList*
+:MessageList		Show all stored messages in the |quickfix| list,
+			starting with the most recent one.
+							     *:MessageVimGrep*
+:MessageVimGrep	[{pattern}]
+			Search all stored messages for {pattern}, and fill the
+			|quickfix| list with the matches.
+
+IDEAS							 *MessageRecall-ideas*
+
+==============================================================================
+HISTORY						       *MessageRecall-history*
+
+1.00	25-Jun-2012
+First published version.
+
+0.01	09-Jun-2012
+Started development.
+
+==============================================================================
+Copyright: (C) 2012 Ingo Karkat
+The VIM LICENSE applies to this script; see |copyright|.
+
+Maintainer:	Ingo Karkat <ingo@karkat.de>
+==============================================================================
+ vim:tw=78:ts=8:ft=help:norl:

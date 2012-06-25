@@ -1,0 +1,65 @@
+This is a mirror of http://www.vim.org/scripts/script.php?script_id=4116
+
+DESCRIPTION
+This plugin automatically persists (parts of) buffers used for the editing of
+commit (or other) messages, where Vim is invoked as the editor from an
+external tool. In these buffers, it sets up mappings and commands to iterate
+through stored past messages, and recall the contents for use in the currently
+edited message. This way, you automatically collect a history of (committed or
+aborted) past messages, and can quickly base your current message on contents
+recalled from that history.
+
+SEE ALSO
+This plugin is used by:
+VcsMessageRecall (vimscript #4117): Browse and re-insert previous VCS commit
+                                    messages.
+
+USAGE
+The plugin is completely inactive until you set it up for a particular
+buffer through the following function; you'll find the details directly in the
+.vim/autoload/MessageRecall.vim implementation file.
+
+MessageRecall#Setup( messageStoreDirspec, ... )
+
+
+INSIDE THE CURRENT MESSAGE BUFFER
+After setup, the following mappings and commands are available in the current
+message buffer:
+
+CTRL-P, CTRL-N          When the buffer has no unsaved changes: Replace the
+                        edited message with a [count]'th previous / next
+                        stored message.
+                        When the buffer is modified: Open the [count]'th
+                        previous / first stored message in the preview window.
+
+
+:[count]MessageView
+                        View the [count]'th previous stored message in the
+                        preview-window.
+:MessageView {message}|{filespec}
+                        View {message} (auto-completed from the message store
+                        directory) or any arbitrary {filespec} contents
+                        in the preview-window.
+
+
+:[count]MessageRecall[!]
+                        Insert the [count]'th previous stored message below
+                        the current line.
+:MessageRecall[!] {message}|{filespec}
+                        Insert {message} (auto-completed from the message
+                        store directory) or any arbitrary {filespec} contents
+                        below the current line.
+
+                        When the existing message consists of just empty
+                        lines (originating from the message template that the
+                        tool invoking Vim has put there), the inserted message
+                        replaces those empty lines. With [!]: Replace an
+                        existing message with the inserted one.
+
+
+INSIDE A MESSAGE PREVIEW WINDOW
+CTRL-P, CTRL-N          Go to the previous / next stored message.
+
+:MessageRecall          Insert the previewed stored message below the current
+                        line in the buffer from which the message preview was
+                        opened.
