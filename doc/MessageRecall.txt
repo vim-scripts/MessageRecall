@@ -26,7 +26,7 @@ recalled from that history.
 SEE ALSO								     *
 
 This plugin is used by:
-VcsMessageRecall (vimscript #0000): Browse and re-insert previous VCS commit
+VcsMessageRecall (vimscript #4117): Browse and re-insert previous VCS commit
 				    messages.
 
 RELATED WORKS								     *
@@ -127,6 +127,9 @@ IDEAS							 *MessageRecall-ideas*
 
 ==============================================================================
 HISTORY						       *MessageRecall-history*
+
+1.01	12-Jul-2012
+BUG: Script error E486 when replacing a non-matching commit message buffer.
 
 1.00	25-Jun-2012
 First published version.

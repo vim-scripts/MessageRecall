@@ -14,6 +14,15 @@
 " Maintainer:	Ingo Karkat <ingo@karkat.de>
 "
 " REVISION	DATE		REMARKS
+"   1.01.004	12-Jul-2012	BUG: ingointegration#GetRange() can throw E486,
+"				causing a script error when replacing a
+"				non-matching commit message buffer; :silent! the
+"				invocation. Likewise, the replacement of the
+"				message can fail, too. We need the
+"				a:options.whenRangeNoMatch value to properly
+"				react to that.
+"				Improve message about limited number of stored
+"				messages for 0 and 1 occurrences.
 "   1.00.003	19-Jun-2012	Fix syntax error in
 "				MessageRecall#Buffer#Complete().
 "				Extract mapping and command setup to
@@ -70,7 +79,11 @@ function! s:GetIndexedMessageFile( messageStoreDirspec, index )
     let l:files = split(glob(ingofile#CombineToFilespec(a:messageStoreDirspec, MessageRecall#Glob())), "\n")
     let l:filespec = get(l:files, a:index, '')
     if empty(l:filespec)
-	let v:errmsg = printf('Only %d messages available', len(l:files))
+	if len(l:files) == 0
+	    let v:errmsg = 'No messages available'
+	else
+	    let v:errmsg = printf('Only %d message%s available', len(l:files), (len(l:files) == 1 ? '' : 's'))
+	endif
 	echohl ErrorMsg
 	echomsg v:errmsg
 	echohl None
@@ -99,7 +112,7 @@ function! s:GetMessageFilespec( index, filespec, messageStoreDirspec )
 
     return l:filespec
 endfunction
-function! MessageRecall#Buffer#Recall( isReplace, count, filespec, messageStoreDirspec, range )
+function! MessageRecall#Buffer#Recall( isReplace, count, filespec, messageStoreDirspec, range, whenRangeNoMatch )
     let l:filespec = s:GetMessageFilespec(-1 * a:count, a:filespec, a:messageStoreDirspec)
     if empty(l:filespec)
 	return
@@ -107,10 +120,28 @@ function! MessageRecall#Buffer#Recall( isReplace, count, filespec, messageStoreD
 
     let l:range = (empty(a:range) ? '%' : a:range)
     let l:insertPoint = ''
-    if a:isReplace || ingointegration#GetRange(l:range) =~# '^\n*$'
-	silent execute l:range 'delete _'
-	let b:MessageRecall_Filename = fnamemodify(l:filespec, ':t')
-	let l:insertPoint = '0'
+    let l:isReplace = a:isReplace
+    silent! let l:isReplace = l:isReplace || ingointegration#GetRange(l:range) =~# '^\n*$'
+    if l:isReplace
+	try
+	    silent execute l:range . 'delete _'
+	    let b:MessageRecall_Filename = fnamemodify(l:filespec, ':t')
+	    let l:insertPoint = '0'
+	catch /^Vim\%((\a\+)\)\=:E/
+	    if a:whenRangeNoMatch ==# 'error'
+		call s:ErrorMsg('MessageRecall: Failed to capture message: ' . substitute(v:exception, '^Vim\%((\a\+)\)\=:', '', ''))
+		return
+	    elseif a:whenRangeNoMatch ==# 'ignore'
+		" Append instead of replacing.
+	    elseif a:whenRangeNoMatch ==# 'all'
+		" Replace the entire buffer instead.
+		silent %delete _
+		let b:MessageRecall_Filename = fnamemodify(l:filespec, ':t')
+		let l:insertPoint = '0'
+	    else
+		throw 'ASSERT: Invalid value for a:whenRangeNoMatch: ' . string(a:whenRangeNoMatch)
+	    endif
+	endtry
     endif
 
     execute 'keepalt' l:insertPoint . 'read' escapings#fnameescape(l:filespec)
