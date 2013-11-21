@@ -1,19 +1,47 @@
 " MessageRecall/Buffer.vim: Functionality for message buffers.
 "
 " DEPENDENCIES:
-"   - escapings.vim autoload script
-"   - ingofile.vim autoload script
-"   - ingointegration.vim autoload script
+"   - ingo/compat.vim autoload script
+"   - ingo/fs/path.vim autoload script
+"   - ingo/msg.vim autoload script
+"   - ingo/range.vim autoload script
+"   - ingo/window/preview.vim autoload script
 "   - EditSimilar/Next.vim autoload script
 "   - MessageRecall.vim autoload script
 "   - MessageRecall/MappingsAndCommands.vim autoload script
 "
-" Copyright: (C) 2012 Ingo Karkat
+" Copyright: (C) 2012-2013 Ingo Karkat
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " Maintainer:	Ingo Karkat <ingo@karkat.de>
 "
 " REVISION	DATE		REMARKS
+"   1.02.010	09-Aug-2013	FIX: Must use String comparison.
+"   1.02.009	08-Aug-2013	Move escapings.vim into ingo-library.
+"   1.02.008	05-Aug-2013	Factor out s:GetRange() and s:IsReplace() from
+"				MessageRecall#Buffer#Recall().
+"				CHG: Only replace on <C-p> / <C-n> in the
+"				message buffer when the considered range is just
+"				empty lines. I came to dislike the previous
+"				replacement also when the message had been
+"				persisted.
+"				Minor: Correctly handle replacement of ranges
+"				that do not start at the beginning of the
+"				buffer. Must insert before the current line
+"				then, not always line 0.
+"				CHG: On <C-p> / <C-n> in the original message
+"				buffer: When the buffer is modified and a stored
+"				message is already being previewed, change the
+"				semantics of count to be interpreted relative to
+"				the currently previewed stored message.
+"				Beforehand, one had to use increasing <C-p>,
+"				2<C-p>, 3<C-p>, etc. to iterate through stored
+"				messages (or go to the preview window and invoke
+"				the mapping there).
+"   1.02.007	23-Jul-2013	Move ingointegration#GetRange() to
+"				ingo#range#Get().
+"   1.02.006	14-Jun-2013	Use ingo/msg.vim.
+"   1.02.005	01-Jun-2013	Move ingofile.vim into ingo-library.
 "   1.01.004	12-Jul-2012	BUG: ingointegration#GetRange() can throw E486,
 "				causing a script error when replacing a
 "				non-matching commit message buffer; :silent! the
@@ -46,14 +74,14 @@ set cpo&vim
 function! MessageRecall#Buffer#Complete( messageStoreDirspec, ArgLead )
     " Complete first files from a:messageStoreDirspec for the {filename} argument,
     " then any path- and filespec from the CWD for {filespec}.
-    let l:messageStoreDirspecPrefix = glob(ingofile#CombineToFilespec(a:messageStoreDirspec, ''))
-    let l:isInMessageStoreDir = (ingofile#CombineToFilespec(getcwd(), '') ==# l:messageStoreDirspecPrefix)
+    let l:messageStoreDirspecPrefix = glob(ingo#fs#path#Combine(a:messageStoreDirspec, ''))
+    let l:isInMessageStoreDir = (ingo#fs#path#Combine(getcwd(), '') ==# l:messageStoreDirspecPrefix)
     return
     \   map(
     \       reverse(
     \           map(
     \               split(
-    \                   glob(ingofile#CombineToFilespec(a:messageStoreDirspec, a:ArgLead . '*')),
+    \                   glob(ingo#fs#path#Combine(a:messageStoreDirspec, a:ArgLead . '*')),
     \                   "\n"
     \               ),
     \               'strpart(v:val, len(l:messageStoreDirspecPrefix))'
@@ -66,27 +94,24 @@ function! MessageRecall#Buffer#Complete( messageStoreDirspec, ArgLead )
     \                   "\n"
     \               ),
     \               'l:isInMessageStoreDir ?' .
-    \	                'ingofile#CombineToFilespec(fnamemodify(v:val, ":p:h"), "") !=# l:messageStoreDirspecPrefix :' .
+    \	                'ingo#fs#path#Combine(fnamemodify(v:val, ":p:h"), "") !=# l:messageStoreDirspecPrefix :' .
     \	                '1'
     \           ),
-    \           'isdirectory(v:val) ? ingofile#CombineToFilespec(v:val, "") : v:val'
+    \           'isdirectory(v:val) ? ingo#fs#path#Combine(v:val, "") : v:val'
     \       ),
-    \       'escapings#fnameescape(v:val)'
+    \       'ingo#compat#fnameescape(v:val)'
     \   )
 endfunction
 
 function! s:GetIndexedMessageFile( messageStoreDirspec, index )
-    let l:files = split(glob(ingofile#CombineToFilespec(a:messageStoreDirspec, MessageRecall#Glob())), "\n")
+    let l:files = split(glob(ingo#fs#path#Combine(a:messageStoreDirspec, MessageRecall#Glob())), "\n")
     let l:filespec = get(l:files, a:index, '')
     if empty(l:filespec)
 	if len(l:files) == 0
-	    let v:errmsg = 'No messages available'
+	    call ingo#msg#ErrorMsg('No messages available')
 	else
-	    let v:errmsg = printf('Only %d message%s available', len(l:files), (len(l:files) == 1 ? '' : 's'))
+	    call ingo#msg#ErrorMsg(printf('Only %d message%s available', len(l:files), (len(l:files) == 1 ? '' : 's')))
 	endif
-	echohl ErrorMsg
-	echomsg v:errmsg
-	echohl None
     endif
 
     return l:filespec
@@ -98,19 +123,30 @@ function! s:GetMessageFilespec( index, filespec, messageStoreDirspec )
 	if filereadable(a:filespec)
 	    let l:filespec = a:filespec
 	else
-	    let l:filespec = ingofile#CombineToFilespec(a:messageStoreDirspec, a:filespec)
+	    let l:filespec = ingo#fs#path#Combine(a:messageStoreDirspec, a:filespec)
 	    if ! filereadable(l:filespec)
 		let l:filespec = ''
 
-		let v:errmsg = 'The stored message does not exist: ' . a:filespec
-		echohl ErrorMsg
-		echomsg v:errmsg
-		echohl None
+		call ingo#msg#ErrorMsg('The stored message does not exist: ' . a:filespec)
 	    endif
 	endif
     endif
 
     return l:filespec
+endfunction
+function! s:GetRange( range )
+    return (empty(a:range) ? '%' : a:range)
+endfunction
+function! s:IsReplace( range, whenRangeNoMatch )
+    let l:isReplace = 0
+    try
+	let l:isReplace = (ingo#range#Get(a:range) =~# '^\n*$')
+    catch /^Vim\%((\a\+)\)\=:E/
+	if a:whenRangeNoMatch ==# 'all'
+	    let l:isReplace = (ingo#range#Get('%') =~# '^\n*$')
+	endif
+    endtry
+    return l:isReplace
 endfunction
 function! MessageRecall#Buffer#Recall( isReplace, count, filespec, messageStoreDirspec, range, whenRangeNoMatch )
     let l:filespec = s:GetMessageFilespec(-1 * a:count, a:filespec, a:messageStoreDirspec)
@@ -118,18 +154,18 @@ function! MessageRecall#Buffer#Recall( isReplace, count, filespec, messageStoreD
 	return
     endif
 
-    let l:range = (empty(a:range) ? '%' : a:range)
-    let l:insertPoint = ''
-    let l:isReplace = a:isReplace
-    silent! let l:isReplace = l:isReplace || ingointegration#GetRange(l:range) =~# '^\n*$'
-    if l:isReplace
+    let l:range = s:GetRange(a:range)
+    let l:insertPoint = '.'
+    if a:isReplace || s:IsReplace(l:range, a:whenRangeNoMatch)
 	try
 	    silent execute l:range . 'delete _'
 	    let b:MessageRecall_Filename = fnamemodify(l:filespec, ':t')
-	    let l:insertPoint = '0'
+	    " After the deletion, the cursor is on the following line. Prepend
+	    " before that.
+	    let l:insertPoint = line('.') - 1
 	catch /^Vim\%((\a\+)\)\=:E/
 	    if a:whenRangeNoMatch ==# 'error'
-		call s:ErrorMsg('MessageRecall: Failed to capture message: ' . substitute(v:exception, '^Vim\%((\a\+)\)\=:', '', ''))
+		call ingo#msg#ErrorMsg('MessageRecall: Failed to capture message: ' . ingo#msg#MsgFromVimException())
 		return
 	    elseif a:whenRangeNoMatch ==# 'ignore'
 		" Append instead of replacing.
@@ -144,9 +180,9 @@ function! MessageRecall#Buffer#Recall( isReplace, count, filespec, messageStoreD
 	endtry
     endif
 
-    execute 'keepalt' l:insertPoint . 'read' escapings#fnameescape(l:filespec)
+    execute 'keepalt' l:insertPoint . 'read' ingo#compat#fnameescape(l:filespec)
 
-    if l:insertPoint ==# '0'
+    if ('' . l:insertPoint) !=# '.'
 	let b:MessageRecall_ChangedTick = b:changedtick
     endif
 endfunction
@@ -173,17 +209,13 @@ function! MessageRecall#Buffer#PreviewRecall( bang, targetBufNr )
     endif
 
     if l:winNr == -1
-	let v:errmsg = 'No target message buffer opened'
-	echohl ErrorMsg
-	echomsg v:errmsg
-	echohl None
-
+	call ingo#msg#ErrorMsg('No target message buffer opened')
 	return
     endif
 
     let l:message = expand('%:t')
     execute l:winNr 'wincmd w'
-    execute 'MessageRecall' . a:bang escapings#fnameescape(l:message)
+    execute 'MessageRecall' . a:bang ingo#compat#fnameescape(l:message)
 endfunction
 function! MessageRecall#Buffer#GetPreviewCommands( targetBufNr, filetype )
     return
@@ -198,28 +230,42 @@ function! MessageRecall#Buffer#Preview( isPrevious, count, filespec, messageStor
 	return
     endif
 
-    execute 'keepalt pedit +' . escape(MessageRecall#Buffer#GetPreviewCommands(a:targetBufNr, &l:filetype), ' \') escapings#fnameescape(l:filespec)
+    execute 'keepalt pedit +' . escape(MessageRecall#Buffer#GetPreviewCommands(a:targetBufNr, &l:filetype), ' \') ingo#compat#fnameescape(l:filespec)
 endfunction
 
-function! MessageRecall#Buffer#Replace( isPrevious, count, messageStoreDirspec, targetBufNr )
+function! MessageRecall#Buffer#Replace( isPrevious, count, messageStoreDirspec, range, whenRangeNoMatch, targetBufNr )
     if exists('b:MessageRecall_ChangedTick') && b:MessageRecall_ChangedTick == b:changedtick
+	" Replace again in the original message buffer.
 	call EditSimilar#Next#Open(
 	\   'MessageRecall!',
 	\   0,
-	\   ingofile#CombineToFilespec(a:messageStoreDirspec, b:MessageRecall_Filename),
+	\   ingo#fs#path#Combine(a:messageStoreDirspec, b:MessageRecall_Filename),
 	\   a:count,
 	\   (a:isPrevious ? -1 : 1),
 	\   MessageRecall#Glob()
 	\)
-    elseif ! &l:modified
+    elseif ! &l:modified && s:IsReplace(s:GetRange(a:range), a:whenRangeNoMatch)
+	" Replace for the first time in the original message buffer.
 	let l:filespec = s:GetIndexedMessageFile(a:messageStoreDirspec, a:isPrevious ? (-1 * a:count) : (a:count - 1))
 	if empty(l:filespec)
 	    return
 	endif
 
-	execute 'MessageRecall!' escapings#fnameescape(l:filespec)
+	execute 'MessageRecall!' ingo#compat#fnameescape(l:filespec)
     else
-	call MessageRecall#Buffer#Preview(a:isPrevious, a:count, '', a:messageStoreDirspec, a:targetBufNr)
+	" Show in preview window.
+	let l:previewWinNr = ingo#window#preview#IsPreviewWindowVisible()
+	let l:previewBufNr = winbufnr(l:previewWinNr)
+	if ! l:previewWinNr || ! getbufvar(l:previewBufNr, 'MessageRecall_Buffer')
+	    " No stored message previewed yet: Open the a:count'th previous /
+	    " first stored message in the preview window.
+	    call MessageRecall#Buffer#Preview(a:isPrevious, a:count, '', a:messageStoreDirspec, a:targetBufNr)
+	else
+	    " DWIM: The semantics of a:count are interpreted relative to the currently previewed stored message.
+	    let l:filespec = fnamemodify(bufname(l:previewBufNr), ':p')
+	    let l:command = 'pedit +' . escape(MessageRecall#Buffer#GetPreviewCommands(a:targetBufNr, &l:filetype), ' \')
+	    call EditSimilar#Next#Open(l:command, 0, l:filespec, a:count, (a:isPrevious ? -1 : 1), MessageRecall#Glob())
+	endif
     endif
 endfunction
 
