@@ -62,3 +62,13 @@ CTRL-P, CTRL-N          Go to the previous / next stored message.
 :MessageRecall          Insert the previewed stored message below the current
                         line in the buffer from which the message preview was
                         opened.
+
+INSIDE BOTH
+:MessageStore[!] {identifier}|{dirspec}
+                        Add the directory {dirspec} as a source (with [!]: set
+                        as the sole source) for recalled messages. If message
+                        stores have been preconfigured (cp.
+                        g:MessageRecall_ConfiguredMessageStores), these can
+                        be referenced via their short {identifier} instead.
+:MessageStore           List all message store directories for the current
+                        buffer.

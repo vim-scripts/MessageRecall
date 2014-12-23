@@ -1,7 +1,6 @@
 " MessageRecall/MappingsAndCommands.vim: Setup for message buffer and preview.
 "
 " DEPENDENCIES:
-"   - EditSimilar/Next.vim autoload script
 "   - ingo/err.vim autoload script
 "   - ingo/escape/command.vim autoload script
 "   - MessageRecall.vim autoload script
@@ -13,6 +12,18 @@
 " Maintainer:	Ingo Karkat <ingo@karkat.de>
 "
 " REVISION	DATE		REMARKS
+"   1.10.008	15-Jul-2014	Undo the duplication of
+"				b:MessageRecall_MessageStores and instead just
+"				pass a:targetBufNr into
+"				MessageRecall#Buffer#OpenNext().
+"				Add s:CommonSetup() which defines a new
+"				:MessageStore command.
+"   1.10.007	14-Jul-2014	Also pass the messageStores configuration to
+"				MessageRecall#MappingsAndCommands#PreviewSetup()
+"				and duplicate the config to each previewed
+"				message buffer.
+"				Replace EditSimilar#Next#Open() with
+"				MessageRecall#Buffer#OpenNext().
 "   1.03.006	01-Apr-2014	Adapt to changed EditSimilar.vim interface that
 "				returns the success status now.
 "				Abort on error for own plugin commands.
@@ -42,14 +53,20 @@
 "				consistency.
 "   1.00.001	19-Jun-2012	file creation
 
+function! s:CommonSetup( targetBufNr, messageStoreDirspec )
+    execute printf('command! -buffer -bang -nargs=? -complete=customlist,MessageRecall#Stores#Complete MessageStore if ! MessageRecall#Stores#Set(%d, %s, <bang>0, <q-args>) | echoerr ingo#err#Get() | endif', a:targetBufNr, string(a:messageStoreDirspec))
+endfunction
+
 function! MessageRecall#MappingsAndCommands#PreviewSetup( targetBufNr, filetype )
     let l:messageStoreDirspec = expand('%:p:h')
+    call s:CommonSetup(a:targetBufNr, l:messageStoreDirspec)
+
     execute printf('command! -buffer -bang MessageRecall if ! MessageRecall#Buffer#PreviewRecall(<q-bang>, %d) | echoerr ingo#err#Get() | endif', a:targetBufNr)
     execute printf('command! -buffer       -count=1 -nargs=? -complete=customlist,%s MessageView if ! MessageRecall#Buffer#Preview(1, <count>, <q-args>, %s, %d) | echoerr ingo#err#Get() | endif', MessageRecall#GetFuncrefs(l:messageStoreDirspec)[1], string(l:messageStoreDirspec), a:targetBufNr)
 
     let l:command = 'view +' . ingo#escape#command#mapescape(escape(MessageRecall#Buffer#GetPreviewCommands(a:targetBufNr, a:filetype), ' \'))
-    execute printf('nnoremap <silent> <buffer> <Plug>(MessageRecallPreviewPrev) :<C-u>if ! EditSimilar#Next#Open(%s, 0, expand("%%:p"), v:count1, -1, MessageRecall#Glob())<Bar>echoerr ingo#err#Get()<Bar>endif<CR>', string(l:command))
-    execute printf('nnoremap <silent> <buffer> <Plug>(MessageRecallPreviewNext) :<C-u>if ! EditSimilar#Next#Open(%s, 0, expand("%%:p"), v:count1,  1, MessageRecall#Glob())<Bar>echoerr ingo#err#Get()<Bar>endif<CR>', string(l:command))
+    execute printf('nnoremap <silent> <buffer> <Plug>(MessageRecallPreviewPrev) :<C-u>if ! MessageRecall#Buffer#OpenNext(%s, %s, "", expand("%%:p"), v:count1, -1, %d)<Bar>echoerr ingo#err#Get()<Bar>endif<CR>', string(l:messageStoreDirspec), string(l:command), a:targetBufNr)
+    execute printf('nnoremap <silent> <buffer> <Plug>(MessageRecallPreviewNext) :<C-u>if ! MessageRecall#Buffer#OpenNext(%s, %s, "", expand("%%:p"), v:count1,  1, %d)<Bar>echoerr ingo#err#Get()<Bar>endif<CR>', string(l:messageStoreDirspec), string(l:command), a:targetBufNr)
     if ! hasmapto('<Plug>(MessageRecallPreviewPrev)', 'n')
 	nmap <buffer> <C-p> <Plug>(MessageRecallPreviewPrev)
     endif
@@ -68,6 +85,8 @@ endfunction
 
 function! MessageRecall#MappingsAndCommands#MessageBufferSetup( messageStoreDirspec, range, whenRangeNoMatch, CompleteFuncref )
     let l:targetBufNr = bufnr('')
+
+    call s:CommonSetup(l:targetBufNr, a:messageStoreDirspec)
 
     execute printf('command! -buffer -bang -count=1 -nargs=? -complete=customlist,%s MessageRecall  if ! MessageRecall#Buffer#Recall(<bang>0, <count>, <q-args>, %s, %s, %s) | echoerr ingo#err#Get() | endif', a:CompleteFuncref, string(a:messageStoreDirspec), string(a:range), string(a:whenRangeNoMatch))
     execute printf('command! -buffer       -count=1 -nargs=? -complete=customlist,%s MessageView    if ! MessageRecall#Buffer#Preview(1, <count>, <q-args>, %s, %d) | echoerr ingo#err#Get() | endif', a:CompleteFuncref, string(a:messageStoreDirspec), l:targetBufNr)
